@@ -21,6 +21,10 @@ sealed class AdvancedCommandMenuMod : MonoBehaviour {
     public PlayerControllerB? SelectedPlayer { get; set; }
     public BaseMenuScreen? CurrentScreen { get; set; } = null;
 
+    // Tab scrolling
+    int TabScrollOffset { get; set; }
+    const int MaxVisibleTabs = 5;
+
     // Screen management
     public readonly Stack<BaseMenuScreen> screenStack = new();
 
@@ -36,6 +40,7 @@ sealed class AdvancedCommandMenuMod : MonoBehaviour {
         internal string syntax;
         internal bool isPrivileged;
         internal string[] parameters;
+        internal string[] parameterDescriptions;
     }
 
     struct CommandCategory {
@@ -92,6 +97,7 @@ sealed class AdvancedCommandMenuMod : MonoBehaviour {
             this.CurrentState = MenuState.CategorySelection;
             this.CurrentCategoryIndex = 0;
             this.CurrentItemIndex = 0;
+            this.TabScrollOffset = 0;
             this.screenStack.Clear();
         }
         Logger.Write($"AdvancedCommandMenuMod: Menu toggled to {this.MenuVisible}");
@@ -106,6 +112,7 @@ sealed class AdvancedCommandMenuMod : MonoBehaviour {
                 this.CurrentCategoryIndex = GetTotalCategories() - 1;
             }
             this.CurrentItemIndex = 0;
+            this.UpdateTabScrollOffset();
         }
     }
 
@@ -118,6 +125,22 @@ sealed class AdvancedCommandMenuMod : MonoBehaviour {
                 this.CurrentCategoryIndex = 0;
             }
             this.CurrentItemIndex = 0;
+            this.UpdateTabScrollOffset();
+        }
+    }
+
+    void UpdateTabScrollOffset() {
+        int totalCategories = GetTotalCategories();
+        if (totalCategories <= MaxVisibleTabs) {
+            this.TabScrollOffset = 0;
+            return;
+        }
+
+        if (this.CurrentCategoryIndex < this.TabScrollOffset) {
+            this.TabScrollOffset = this.CurrentCategoryIndex;
+        }
+        else if (this.CurrentCategoryIndex >= this.TabScrollOffset + MaxVisibleTabs) {
+            this.TabScrollOffset = this.CurrentCategoryIndex - MaxVisibleTabs + 1;
         }
     }
 
@@ -194,32 +217,86 @@ sealed class AdvancedCommandMenuMod : MonoBehaviour {
 
     void HandleCategorySelection() {
         if (this.CurrentCategoryIndex == GetTotalCategories() - 1) {
-            // Players tab
+            // Players tab - switch to player selection
             this.CurrentState = MenuState.PlayerSelection;
+            this.screenStack.Clear();
             this.CurrentScreen = new PlayersMenuScreen(this);
         }
         else {
-            // Regular category - execute command directly
-            this.ExecuteRegularCommand();
+            // Regular category - check if command needs parameters
+            CommandCategory category = GetCategory(this.CurrentCategoryIndex);
+            if (this.CurrentItemIndex < 0 || this.CurrentItemIndex >= category.commands.Length) return;
+
+            CommandInfo command = category.commands[this.CurrentItemIndex];
+
+            bool isHost = Helper.LocalPlayer?.IsHost ?? false;
+            if (command.isPrivileged && !isHost) {
+                TeleportationMenuManager.StatusMessage = "Command requires host privileges!";
+                return;
+            }
+
+            if (command.parameters != null && command.parameters.Length > 0) {
+                // Show parameter input screen
+                this.CurrentState = MenuState.ParameterInput;
+                this.CurrentScreen = new ParameterInputMenuScreen(
+                    this, 
+                    command.name, 
+                    command.syntax, 
+                    command.parameters, 
+                    command.parameterDescriptions
+                );
+            }
+            else {
+                // Execute command directly
+                this.ExecuteRegularCommand(command, []);
+            }
         }
     }
 
-    void ExecuteRegularCommand() {
-        CommandCategory category = GetCategory(this.CurrentCategoryIndex);
-        if (this.CurrentItemIndex < 0 || this.CurrentItemIndex >= category.commands.Length) return;
-
-        CommandInfo command = category.commands[this.CurrentItemIndex];
-
-        bool isHost = Helper.LocalPlayer?.IsHost ?? false;
-        if (command.isPrivileged && !isHost) {
-            TeleportationMenuManager.StatusMessage = "Command requires host privileges!";
-            return;
+    internal async void ExecuteRegularCommand(CommandInfo command, string[] parameters) {
+        TeleportationMenuManager.StatusMessage = $"Executing {command.name}...";
+        
+        CommandResult result = await CommandExecutor.ExecuteAsync(command.syntax, new Arguments { Span = parameters }, CommandInvocationSource.Direct);
+        
+        if (result.Success) {
+            TeleportationMenuManager.StatusMessage = $"{command.name} executed successfully!";
+        }
+        else {
+            TeleportationMenuManager.StatusMessage = result.Message ?? $"Failed to execute {command.name}";
+            if (result.Message is not null) {
+                Chat.Print(result.Message);
+            }
         }
 
+        // Clear message after 3 seconds
         _ = Task.Run(async () => {
-            CommandResult result = await CommandExecutor.ExecuteAsync(command.syntax, new Arguments { Span = [] }, CommandInvocationSource.Direct);
-            if (!result.Success && result.Message is not null) {
+            await Task.Delay(3000);
+            if (TeleportationMenuManager.StatusMessage?.Contains(command.name) ?? false) {
+                TeleportationMenuManager.StatusMessage = null;
+            }
+        });
+    }
+
+    internal async void ExecuteRegularCommandWithParams(string commandName, string commandSyntax, string[] parameters) {
+        TeleportationMenuManager.StatusMessage = $"Executing {commandName}...";
+        
+        CommandResult result = await CommandExecutor.ExecuteAsync(commandSyntax, new Arguments { Span = parameters }, CommandInvocationSource.Direct);
+        
+        if (result.Success) {
+            TeleportationMenuManager.StatusMessage = $"{commandName} executed successfully!";
+        }
+        else {
+            TeleportationMenuManager.StatusMessage = result.Message ?? $"Failed to execute {commandName}";
+            if (result.Message is not null) {
                 Chat.Print(result.Message);
+            }
+        }
+
+        // Clear message after 3 seconds
+        _ = Task.Run(async () => {
+            await Task.Delay(3000);
+            if (TeleportationMenuManager.StatusMessage?.Contains(commandName) ?? false) {
+                TeleportationMenuManager.StatusMessage = null;
             }
         });
     }
@@ -243,34 +320,35 @@ sealed class AdvancedCommandMenuMod : MonoBehaviour {
             new CommandCategory {
                 name = "Combat",
                 commands = [
-                    new CommandInfo { name = "Noise", syntax = "noise", parameters = ["player", "duration"] },
-                    new CommandInfo { name = "Bomb", syntax = "bomb", parameters = ["player"] },
-                    new CommandInfo { name = "Bombard", syntax = "bombard", parameters = ["player"] },
-                    new CommandInfo { name = "Hate", syntax = "hate", parameters = ["player"] },
-                    new CommandInfo { name = "Mask", syntax = "mask", parameters = ["player", "amount"] },
-                    new CommandInfo { name = "Fatality", syntax = "fatality", parameters = ["player", "enemy"] },
-                    new CommandInfo { name = "Poison", syntax = "poison", parameters = ["player", "damage", "duration", "delay"] },
-                    new CommandInfo { name = "Stun", syntax = "stun", parameters = ["player"] },
-                    new CommandInfo { name = "Kill", syntax = "kill", parameters = ["player"] },
+                    new CommandInfo { name = "Noise", syntax = "noise", parameters = ["player", "duration"], parameterDescriptions = ["Player name", "Duration (seconds, default 30)"] },
+                    new CommandInfo { name = "Bomb", syntax = "bomb", parameters = ["player"], parameterDescriptions = ["Player name"] },
+                    new CommandInfo { name = "Bombard", syntax = "bombard", parameters = ["player"], parameterDescriptions = ["Player name"] },
+                    new CommandInfo { name = "Hate", syntax = "hate", parameters = ["player"], parameterDescriptions = ["Player name"] },
+                    new CommandInfo { name = "Mask", syntax = "mask", parameters = ["player", "amount"], parameterDescriptions = ["Player name", "Amount (default 1)"] },
+                    new CommandInfo { name = "Fatality", syntax = "fatality", parameters = ["player", "enemy"], parameterDescriptions = ["Player name", "Enemy type"] },
+                    new CommandInfo { name = "Poison", syntax = "poison", parameters = ["player", "damage", "duration", "delay"], parameterDescriptions = ["Player name", "Damage per tick", "Duration (seconds)", "Delay (seconds)"] },
+                    new CommandInfo { name = "Stun", syntax = "stun", parameters = ["player", "duration"], parameterDescriptions = ["Player name", "Duration (seconds)"] },
+                    new CommandInfo { name = "Kill", syntax = "kill", parameters = ["player"], parameterDescriptions = ["Player name"] },
                 ]
             },
             new CommandCategory {
                 name = "Utilities",
                 commands = [
-                    new CommandInfo { name = "Say", syntax = "say", parameters = ["player", "message"] },
-                    new CommandInfo { name = "Translate", syntax = "translate" },
-                    new CommandInfo { name = "Buy", syntax = "buy", parameters = ["item", "quantity"] },
-                    new CommandInfo { name = "Grab", syntax = "grab", parameters = ["item"] },
+                    new CommandInfo { name = "Say", syntax = "say", parameters = ["player", "message"], parameterDescriptions = ["Player name", "Message to send"] },
+                    new CommandInfo { name = "Translate", syntax = "translate", parameters = ["language", "message"], parameterDescriptions = ["Language", "Message to translate"] },
+                    new CommandInfo { name = "Buy", syntax = "buy", parameters = ["item", "quantity"], parameterDescriptions = ["Item name", "Quantity (optional)"] },
+                    new CommandInfo { name = "Grab", syntax = "grab", parameters = ["item"], parameterDescriptions = ["Item name (optional)"] },
                 ]
             },
             new CommandCategory {
                 name = "World",
                 commands = [
                     new CommandInfo { name = "Block", syntax = "block" },
-                    new CommandInfo { name = "Build", syntax = "build" },
-                    new CommandInfo { name = "Suit", syntax = "suit", parameters = ["suit"] },
-                    new CommandInfo { name = "Visit", syntax = "visit" },
-                    new CommandInfo { name = "Spin", syntax = "spin" },
+                    new CommandInfo { name = "Build", syntax = "build", parameters = ["unlockable"], parameterDescriptions = ["Unlockable name"] },
+                    new CommandInfo { name = "Suit", syntax = "suit", parameters = ["suit"], parameterDescriptions = ["Suit type"] },
+                    new CommandInfo { name = "Visit", syntax = "visit", parameters = ["moon"], parameterDescriptions = ["Moon name"] },
+                    new CommandInfo { name = "Spin", syntax = "spin", parameters = ["duration"], parameterDescriptions = ["Duration (seconds)"] },
+                    new CommandInfo { name = "Horn", syntax = "horn", parameters = ["duration"], parameterDescriptions = ["Duration (seconds)"] },
                     new CommandInfo { name = "Explode", syntax = "explode" },
                 ]
             },
@@ -290,7 +368,9 @@ sealed class AdvancedCommandMenuMod : MonoBehaviour {
                 commands = [
                     new CommandInfo { name = "Start Game", syntax = "start" },
                     new CommandInfo { name = "End Game", syntax = "end" },
-                    new CommandInfo { name = "Heal", syntax = "heal", parameters = ["player"] },
+                    new CommandInfo { name = "Heal", syntax = "heal", parameters = ["player"], parameterDescriptions = ["Player name"] },
+                    new CommandInfo { name = "XP", syntax = "xp", parameters = ["amount"], parameterDescriptions = ["XP amount"] },
+                    new CommandInfo { name = "Shovel", syntax = "shovel", parameters = ["force"], parameterDescriptions = ["Force value (default 1)"] },
                     new CommandInfo { name = "Players", syntax = "players" },
                     new CommandInfo { name = "Clear", syntax = "clear" },
                 ]
@@ -298,10 +378,12 @@ sealed class AdvancedCommandMenuMod : MonoBehaviour {
             new CommandCategory {
                 name = "Privileged",
                 commands = [
-                    new CommandInfo { name = "Spawn Enemy", syntax = "spawn", parameters = ["enemy", "player", "amount"], isPrivileged = true },
-                    new CommandInfo { name = "Credit", syntax = "credit", parameters = ["amount"], isPrivileged = true },
+                    new CommandInfo { name = "Spawn Enemy", syntax = "spawn", parameters = ["enemy", "amount"], parameterDescriptions = ["Enemy type", "Amount"], isPrivileged = true },
+                    new CommandInfo { name = "Credit", syntax = "credit", parameters = ["amount"], parameterDescriptions = ["Credit amount"], isPrivileged = true },
+                    new CommandInfo { name = "Quota", syntax = "quota", parameters = ["amount", "fulfilled"], parameterDescriptions = ["Quota amount", "Fulfilled amount (optional, default 0)"], isPrivileged = true },
+                    new CommandInfo { name = "Timescale", syntax = "timescale", parameters = ["scale"], parameterDescriptions = ["Time scale (1.0 = normal)"], isPrivileged = true },
                     new CommandInfo { name = "Land", syntax = "land", isPrivileged = true },
-                    new CommandInfo { name = "Eject", syntax = "eject", isPrivileged = true },
+                    new CommandInfo { name = "Eject", syntax = "eject", parameters = ["player"], parameterDescriptions = ["Player name"], isPrivileged = true },
                     new CommandInfo { name = "Revive", syntax = "revive", isPrivileged = true },
                 ]
             },
@@ -399,28 +481,55 @@ sealed class AdvancedCommandMenuMod : MonoBehaviour {
 
     void DrawCategorySelection() {
         CommandCategory[] categories = GetCategories();
+        int totalCategories = categories.Length;
 
-        // Draw category tabs
+        // Draw category tabs with scrolling support
         GUILayout.BeginHorizontal();
-        for (int i = 0; i < categories.Length; i++) {
+        
+        // Show scroll indicator if needed
+        if (totalCategories > MaxVisibleTabs && this.TabScrollOffset > 0) {
+            if (GUILayout.Button("◀", GUILayout.Width(30), GUILayout.Height(30))) {
+                this.TabScrollOffset = Mathf.Max(0, this.TabScrollOffset - 1);
+            }
+        }
+
+        // Draw visible tabs
+        int endIndex = Mathf.Min(this.TabScrollOffset + MaxVisibleTabs, totalCategories);
+        for (int i = this.TabScrollOffset; i < endIndex; i++) {
             GUIStyle tabStyle = new(GUI.skin.button);
             if (i == this.CurrentCategoryIndex) {
                 tabStyle.normal.background = GUI.skin.box.normal.background;
+                GUI.backgroundColor = Color.green;
             }
 
             if (GUILayout.Button(categories[i].name, tabStyle, GUILayout.Height(30))) {
                 this.CurrentCategoryIndex = i;
                 this.CurrentItemIndex = 0;
             }
+
+            GUI.backgroundColor = Color.white;
         }
+
+        // Show scroll indicator if needed
+        if (totalCategories > MaxVisibleTabs && this.TabScrollOffset + MaxVisibleTabs < totalCategories) {
+            if (GUILayout.Button("▶", GUILayout.Width(30), GUILayout.Height(30))) {
+                this.TabScrollOffset = Mathf.Min(totalCategories - MaxVisibleTabs, this.TabScrollOffset + 1);
+            }
+        }
+
         GUILayout.EndHorizontal();
+
+        // Show current tab indicator
+        if (totalCategories > MaxVisibleTabs) {
+            GUILayout.Label($"Tab {this.CurrentCategoryIndex + 1}/{totalCategories}: {categories[this.CurrentCategoryIndex].name}", GUI.skin.label);
+        }
 
         GUILayout.Space(10);
 
         // Draw commands for current category
         if (this.CurrentCategoryIndex == categories.Length - 1) {
             // Players tab - show message to press numpad 5
-            GUILayout.Label("Players Tab - Press Numpad 5 to scan lobby", GUI.skin.box, GUILayout.Height(50));
+            GUILayout.Label("Players Tab - Press Numpad 5 to view players", GUI.skin.box, GUILayout.Height(50));
         }
         else {
             CommandCategory currentCategory = categories[this.CurrentCategoryIndex];
@@ -428,6 +537,12 @@ sealed class AdvancedCommandMenuMod : MonoBehaviour {
         }
 
         GUILayout.Space(10);
+
+        // Show status message if available
+        if (!string.IsNullOrEmpty(TeleportationMenuManager.StatusMessage)) {
+            GUILayout.Label(TeleportationMenuManager.StatusMessage, GUI.skin.box, GUILayout.Height(30));
+        }
+
         GUILayout.Label("Numpad: 4=Prev Tab, 6=Next Tab, 8=Up, 2=Down, 5=Select, M=Close", GUI.skin.label);
     }
 
@@ -453,6 +568,9 @@ sealed class AdvancedCommandMenuMod : MonoBehaviour {
             }
 
             string buttonText = cmd.name;
+            if (cmd.parameters != null && cmd.parameters.Length > 0) {
+                buttonText += " [→]";
+            }
             if (cmd.isPrivileged && !isHost) {
                 buttonText += " [HOST ONLY]";
                 GUI.color = Color.gray;
@@ -462,7 +580,7 @@ sealed class AdvancedCommandMenuMod : MonoBehaviour {
             if (GUILayout.Button(buttonText, GUILayout.Height(35))) {
                 this.CurrentItemIndex = i;
                 if (!cmd.isPrivileged || isHost) {
-                    this.ExecuteRegularCommand();
+                    this.HandleCategorySelection();
                 }
             }
 

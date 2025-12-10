@@ -36,6 +36,7 @@ sealed class PlayersMenuScreen : BaseMenuScreen {
 
         // Push player commands screen
         this.Menu.screenStack.Push(this);
+        this.Menu.CurrentState = AdvancedCommandMenuMod.MenuState.PlayerCommandSelection;
         this.Menu.CurrentScreen = new PlayerCommandsMenuScreen(this.Menu, selectedPlayer);
     }
 
@@ -93,6 +94,13 @@ sealed class PlayersMenuScreen : BaseMenuScreen {
 
         if (GUILayout.Button("Back", GUILayout.Height(30))) {
             this.Back();
+        }
+
+        GUILayout.Space(10);
+
+        // Show status message if available
+        if (!string.IsNullOrEmpty(TeleportationMenuManager.StatusMessage)) {
+            GUILayout.Label(TeleportationMenuManager.StatusMessage, GUI.skin.box, GUILayout.Height(30));
         }
 
         GUILayout.Label("Numpad: 8=Up, 2=Down, 5=Select, Backspace=Back", GUI.skin.label);

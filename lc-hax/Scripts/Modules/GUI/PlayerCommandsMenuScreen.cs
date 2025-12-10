@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using GameNetcodeStuff;
 using UnityEngine;
 
@@ -170,6 +171,8 @@ sealed class PlayerCommandsMenuScreen(AdvancedCommandMenuMod menu, PlayerControl
 
     async void ExecutePlayerCommand(PlayerCommand command, string[] arguments) {
         try {
+            TeleportationMenuManager.StatusMessage = $"Executing {command.name}...";
+
             // Replace {player} placeholder with actual player name
             string[] finalArgs = [.. arguments.Select(arg =>
                 arg.Contains("{player}") ? this.TargetPlayer.playerUsername : arg
@@ -183,10 +186,27 @@ sealed class PlayerCommandsMenuScreen(AdvancedCommandMenuMod menu, PlayerControl
             CommandResult result = await CommandExecutor.ExecuteAsync(command.syntax,
                 new Arguments { Span = finalArgs }, CommandInvocationSource.Direct);
 
-            TeleportationMenuManager.StatusMessage = !result.Success && result.Message != null ? result.Message : $"Executed {command.name} on {this.TargetPlayer.playerUsername}";
+            if (result.Success) {
+                TeleportationMenuManager.StatusMessage = $"{command.name} executed on {this.TargetPlayer.playerUsername}!";
+            }
+            else {
+                TeleportationMenuManager.StatusMessage = result.Message ?? $"Failed to execute {command.name}";
+                if (result.Message is not null) {
+                    Chat.Print(result.Message);
+                }
+            }
+
+            // Clear message after 3 seconds
+            _ = Task.Run(async () => {
+                await Task.Delay(3000);
+                if (TeleportationMenuManager.StatusMessage?.Contains(command.name) ?? false) {
+                    TeleportationMenuManager.StatusMessage = null;
+                }
+            });
         }
         catch (Exception ex) {
-            TeleportationMenuManager.StatusMessage = $"Error executing command: {ex.Message}";
+            TeleportationMenuManager.StatusMessage = $"Error: {ex.Message}";
+            Logger.Write(ex);
         }
 
         this.IsAwaitingInput = false;
@@ -214,6 +234,13 @@ sealed class PlayerCommandsMenuScreen(AdvancedCommandMenuMod menu, PlayerControl
 
         if (GUILayout.Button("Back", GUILayout.Height(30))) {
             this.Back();
+        }
+
+        GUILayout.Space(10);
+
+        // Show status message if available
+        if (!string.IsNullOrEmpty(TeleportationMenuManager.StatusMessage)) {
+            GUILayout.Label(TeleportationMenuManager.StatusMessage, GUI.skin.box, GUILayout.Height(30));
         }
 
         GUILayout.Label("Numpad: 8=Up, 2=Down, 5=Select, Backspace=Back", GUI.skin.label);
