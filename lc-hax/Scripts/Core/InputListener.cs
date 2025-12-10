@@ -32,6 +32,9 @@ sealed class InputListener : MonoBehaviour {
     internal static event Action? OnNumpad8Press;
     internal static event Action? OnNumpad2Press;
     internal static event Action? OnNumpad5Press;
+    internal static event Action? OnNumpad4Press;
+    internal static event Action? OnNumpad6Press;
+    internal static event Action? OnBackspacePress;
 
     (Func<bool>, Action)[] InputActions { get; } = [
         (() => Mouse.current.middleButton.wasPressedThisFrame, () => InputListener.OnMiddleButtonPress?.Invoke()),
@@ -59,6 +62,9 @@ sealed class InputListener : MonoBehaviour {
         (() => Keyboard.current[Key.Numpad8].wasPressedThisFrame, () => InputListener.OnNumpad8Press?.Invoke()),
         (() => Keyboard.current[Key.Numpad2].wasPressedThisFrame, () => InputListener.OnNumpad2Press?.Invoke()),
         (() => Keyboard.current[Key.Numpad5].wasPressedThisFrame, () => InputListener.OnNumpad5Press?.Invoke()),
+        (() => Keyboard.current[Key.Numpad4].wasPressedThisFrame, () => InputListener.OnNumpad4Press?.Invoke()),
+        (() => Keyboard.current[Key.Numpad6].wasPressedThisFrame, () => InputListener.OnNumpad6Press?.Invoke()),
+        (() => Keyboard.current[Key.Backspace].wasPressedThisFrame, () => InputListener.OnBackspacePress?.Invoke()),
     ];
 
     void Update() {

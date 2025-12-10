@@ -83,6 +83,7 @@ sealed class Loader : MonoBehaviour {
         Loader.AddHaxModules<ClearVisionMod>();
         Loader.AddHaxModules<InstantInteractMod>();
         Loader.AddHaxModules<CommandMenuMod>();
+        Loader.AddHaxModules<AdvancedCommandMenuMod>();
     }
 
     internal static void Unload() {
