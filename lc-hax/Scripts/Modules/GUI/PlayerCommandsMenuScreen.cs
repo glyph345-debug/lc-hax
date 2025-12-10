@@ -130,7 +130,7 @@ sealed class PlayerCommandsMenuScreen(AdvancedCommandMenuMod menu, PlayerControl
         }
     }
 
-    void ShowParameterInput(string parameterType, PlayerCommand command) {
+    void ShowParameterInput(string parameterType, PlayerCommand _) {
         // This would show input fields, menus, etc. based on parameter type
         // For now, we'll use GUI.TextField for simplicity
         GUILayout.Label($"Enter {parameterType}:", GUI.skin.box);
@@ -140,7 +140,7 @@ sealed class PlayerCommandsMenuScreen(AdvancedCommandMenuMod menu, PlayerControl
         this.ParameterValues[this.CurrentParameterIndex] = newValue;
 
         if (GUILayout.Button("Confirm", GUILayout.Height(30))) {
-            if (!this.ValidateParameter(parameterType, newValue)) {
+            if (!ValidateParameter(parameterType, newValue)) {
                 TeleportationMenuManager.StatusMessage = $"Invalid {parameterType}!";
                 return;
             }
@@ -149,7 +149,7 @@ sealed class PlayerCommandsMenuScreen(AdvancedCommandMenuMod menu, PlayerControl
         }
     }
 
-    bool ValidateParameter(string parameterType, string value) {
+    static bool ValidateParameter(string parameterType, string value) {
         return parameterType.ToLower() switch {
             "duration" or "damage" or "delay" or "amount" or "x" or "y" or "z" or "quantity" => float.TryParse(value, out _),
             "player" => IsValidPlayer(value),

@@ -19,7 +19,7 @@ sealed class AdvancedCommandMenuMod : MonoBehaviour {
     // Menu state
     public MenuState CurrentState { get; set; } = MenuState.CategorySelection;
     public PlayerControllerB? SelectedPlayer { get; set; }
-    public BaseMenuScreen? CurrentScreen { get; set; }
+    public BaseMenuScreen? CurrentScreen { get; set; } = null;
 
     // Screen management
     public readonly Stack<BaseMenuScreen> screenStack = new();
@@ -97,7 +97,7 @@ sealed class AdvancedCommandMenuMod : MonoBehaviour {
         if (this.CurrentState == MenuState.CategorySelection) {
             this.CurrentCategoryIndex--;
             if (this.CurrentCategoryIndex < 0) {
-                this.CurrentCategoryIndex = this.GetTotalCategories() - 1;
+                this.CurrentCategoryIndex = GetTotalCategories() - 1;
             }
             this.CurrentItemIndex = 0;
         }
@@ -108,7 +108,7 @@ sealed class AdvancedCommandMenuMod : MonoBehaviour {
 
         if (this.CurrentState == MenuState.CategorySelection) {
             this.CurrentCategoryIndex++;
-            if (this.CurrentCategoryIndex >= this.GetTotalCategories()) {
+            if (this.CurrentCategoryIndex >= GetTotalCategories()) {
                 this.CurrentCategoryIndex = 0;
             }
             this.CurrentItemIndex = 0;
@@ -187,7 +187,7 @@ sealed class AdvancedCommandMenuMod : MonoBehaviour {
     }
 
     void HandleCategorySelection() {
-        if (this.CurrentCategoryIndex == this.GetTotalCategories() - 1) {
+        if (this.CurrentCategoryIndex == GetTotalCategories() - 1) {
             // Players tab
             this.CurrentState = MenuState.PlayerSelection;
             this.CurrentScreen = new PlayersMenuScreen(this);
@@ -199,7 +199,7 @@ sealed class AdvancedCommandMenuMod : MonoBehaviour {
     }
 
     void ExecuteRegularCommand() {
-        CommandCategory category = this.GetCategory(this.CurrentCategoryIndex);
+        CommandCategory category = GetCategory(this.CurrentCategoryIndex);
         if (this.CurrentItemIndex < 0 || this.CurrentItemIndex >= category.commands.Length) return;
 
         CommandInfo command = category.commands[this.CurrentItemIndex];
@@ -218,7 +218,7 @@ sealed class AdvancedCommandMenuMod : MonoBehaviour {
         });
     }
 
-    int GetTotalCategories() => GetCategories().Length;
+    static int GetTotalCategories() => GetCategories().Length;
 
     static CommandCategory[] GetCategories() {
         return [
@@ -306,7 +306,7 @@ sealed class AdvancedCommandMenuMod : MonoBehaviour {
         ];
     }
 
-    CommandCategory GetCategory(int index) => GetCategories()[index];
+    static CommandCategory GetCategory(int index) => GetCategories()[index];
 
     void LoadWindowPosition() {
         Vector2 position = this.WindowPosition;
@@ -347,8 +347,7 @@ sealed class AdvancedCommandMenuMod : MonoBehaviour {
         if (this.IsDragging) {
             Vector2 mousePos = Input.mousePosition;
             mousePos.y = Screen.height - mousePos.y; // Flip Y coordinate
-            Vector2 position = this.WindowPosition;
-            position = mousePos - this.DragOffset;
+            Vector2 position = mousePos - this.DragOffset;
             this.WindowPosition = position;
             this.KeepWindowInBounds();
         }
