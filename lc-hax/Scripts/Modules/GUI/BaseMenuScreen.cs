@@ -26,6 +26,8 @@ class BaseMenuScreen {
                      TeleportToPlayerMenuScreen or
                      TeleportPlayerTransferMenuScreen) {
                 this.Menu.CurrentState = AdvancedCommandMenuMod.MenuState.TeleportationSubmenu;
+            else if (this.Menu.CurrentScreen is PlayerPickerMenuScreen) {
+                this.Menu.CurrentState = AdvancedCommandMenuMod.MenuState.ParameterInput;
             }
         }
         else {
