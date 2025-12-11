@@ -21,6 +21,9 @@ class BaseMenuScreen {
             else if (this.Menu.CurrentScreen is ParameterInputMenuScreen) {
                 this.Menu.CurrentState = AdvancedCommandMenuMod.MenuState.ParameterInput;
             }
+            else if (this.Menu.CurrentScreen is PlayerPickerMenuScreen) {
+                this.Menu.CurrentState = AdvancedCommandMenuMod.MenuState.ParameterInput;
+            }
         }
         else {
             this.Menu.CurrentState = AdvancedCommandMenuMod.MenuState.CategorySelection;
