@@ -176,14 +176,22 @@ sealed class AdvancedCommandMenuMod : MonoBehaviour {
         float viewportTop = scrollPos.y;
         float viewportBottom = scrollPos.y + CommandViewportHeight;
 
+        bool needScroll = false;
+        float newScrollY = scrollPos.y;
+
         if (selectedItemTop < viewportTop) {
-            scrollPos.y = selectedItemTop;
+            newScrollY = selectedItemTop;
+            needScroll = true;
         }
         else if (selectedItemBottom > viewportBottom) {
-            scrollPos.y = Mathf.Max(0, selectedItemBottom - CommandViewportHeight);
+            newScrollY = Mathf.Max(0, selectedItemBottom - CommandViewportHeight);
+            needScroll = true;
         }
 
-        this.commandScrollPositions[categoryIndex] = scrollPos;
+        if (needScroll) {
+            scrollPos.y = newScrollY;
+            this.commandScrollPositions[categoryIndex] = scrollPos;
+        }
     }
 
     void HandleBackNavigation() {
@@ -216,15 +224,14 @@ sealed class AdvancedCommandMenuMod : MonoBehaviour {
 
         switch (this.CurrentState) {
             case MenuState.CategorySelection:
+                CommandCategory category = GetCategory(this.CurrentCategoryIndex);
+                if (category.commands.Length == 0) return;
+
                 this.CurrentItemIndex--;
-                if (this.CurrentCategoryIndex < GetTotalCategories() - 1) {
-                    // Regular category navigation
-                    CommandCategory category = GetCategory(this.CurrentCategoryIndex);
-                    if (this.CurrentItemIndex < 0) {
-                        this.CurrentItemIndex = category.commands.Length - 1;
-                    }
+                if (this.CurrentItemIndex < 0) {
+                    this.CurrentItemIndex = category.commands.Length - 1;
                 }
-                this.EnsureSelectedCommandVisible(this.CurrentCategoryIndex, GetCategory(this.CurrentCategoryIndex).commands.Length);
+                this.EnsureSelectedCommandVisible(this.CurrentCategoryIndex, category.commands.Length);
                 break;
             case MenuState.PlayerSelection:
             case MenuState.ParameterInput:
@@ -242,15 +249,14 @@ sealed class AdvancedCommandMenuMod : MonoBehaviour {
 
         switch (this.CurrentState) {
             case MenuState.CategorySelection:
+                CommandCategory category = GetCategory(this.CurrentCategoryIndex);
+                if (category.commands.Length == 0) return;
+
                 this.CurrentItemIndex++;
-                if (this.CurrentCategoryIndex < GetTotalCategories() - 1) {
-                    // Regular category navigation
-                    CommandCategory category = GetCategory(this.CurrentCategoryIndex);
-                    if (this.CurrentItemIndex >= category.commands.Length) {
-                        this.CurrentItemIndex = 0;
-                    }
+                if (this.CurrentItemIndex >= category.commands.Length) {
+                    this.CurrentItemIndex = 0;
                 }
-                this.EnsureSelectedCommandVisible(this.CurrentCategoryIndex, GetCategory(this.CurrentCategoryIndex).commands.Length);
+                this.EnsureSelectedCommandVisible(this.CurrentCategoryIndex, category.commands.Length);
                 break;
             case MenuState.PlayerSelection:
             case MenuState.ParameterInput:
@@ -642,11 +648,16 @@ sealed class AdvancedCommandMenuMod : MonoBehaviour {
 
         bool isHost = Helper.LocalPlayer?.IsHost ?? false;
 
+        // Get current scroll position or initialize to zero
         if (!this.commandScrollPositions.TryGetValue(this.CurrentCategoryIndex, out Vector2 scrollPos)) {
             scrollPos = Vector2.zero;
+            this.commandScrollPositions[this.CurrentCategoryIndex] = scrollPos;
         }
 
+        // Apply scroll position before drawing commands
         scrollPos = GUILayout.BeginScrollView(scrollPos, GUILayout.Height(CommandViewportHeight));
+
+        // Update stored scroll position after BeginScrollView
         this.commandScrollPositions[this.CurrentCategoryIndex] = scrollPos;
 
         for (int i = 0; i < category.commands.Length; i++) {
