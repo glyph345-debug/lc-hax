@@ -25,6 +25,11 @@ sealed class AdvancedCommandMenuMod : MonoBehaviour {
     int TabScrollOffset { get; set; }
     const int MaxVisibleTabs = 5;
 
+    // Command scrolling per category
+    readonly Dictionary<int, Vector2> commandScrollPositions = [];
+    const int CommandButtonHeight = 35;
+    const int CommandViewportHeight = 300;
+
     // Screen management
     public readonly Stack<BaseMenuScreen> screenStack = new();
 
@@ -109,6 +114,7 @@ sealed class AdvancedCommandMenuMod : MonoBehaviour {
             Logger.Write("Insert or M: Toggle menu");
             Logger.Write($"Available categories: {GetCategoryNamesString()}");
             Logger.Write("================================================");
+            this.EnsureSelectedCommandVisible(this.CurrentCategoryIndex, GetCategory(this.CurrentCategoryIndex).commands.Length);
         }
         Logger.Write($"AdvancedCommandMenuMod: Menu toggled to {this.MenuVisible}");
     }
@@ -123,6 +129,7 @@ sealed class AdvancedCommandMenuMod : MonoBehaviour {
             }
             this.CurrentItemIndex = 0;
             this.UpdateTabScrollOffset();
+            this.EnsureSelectedCommandVisible(this.CurrentCategoryIndex, GetCategory(this.CurrentCategoryIndex).commands.Length);
         }
     }
 
@@ -136,6 +143,7 @@ sealed class AdvancedCommandMenuMod : MonoBehaviour {
             }
             this.CurrentItemIndex = 0;
             this.UpdateTabScrollOffset();
+            this.EnsureSelectedCommandVisible(this.CurrentCategoryIndex, GetCategory(this.CurrentCategoryIndex).commands.Length);
         }
     }
 
@@ -152,6 +160,28 @@ sealed class AdvancedCommandMenuMod : MonoBehaviour {
         else if (this.CurrentCategoryIndex >= this.TabScrollOffset + MaxVisibleTabs) {
             this.TabScrollOffset = this.CurrentCategoryIndex - MaxVisibleTabs + 1;
         }
+    }
+
+    void EnsureSelectedCommandVisible(int categoryIndex, int commandCount) {
+        if (commandCount == 0) return;
+
+        if (!this.commandScrollPositions.TryGetValue(categoryIndex, out Vector2 scrollPos)) {
+            scrollPos = Vector2.zero;
+        }
+
+        float selectedItemTop = this.CurrentItemIndex * CommandButtonHeight;
+        float selectedItemBottom = selectedItemTop + CommandButtonHeight;
+        float viewportTop = scrollPos.y;
+        float viewportBottom = scrollPos.y + CommandViewportHeight;
+
+        if (selectedItemTop < viewportTop) {
+            scrollPos.y = selectedItemTop;
+        }
+        else if (selectedItemBottom > viewportBottom) {
+            scrollPos.y = Mathf.Max(0, selectedItemBottom - CommandViewportHeight);
+        }
+
+        this.commandScrollPositions[categoryIndex] = scrollPos;
     }
 
     void HandleBackNavigation() {
@@ -179,6 +209,7 @@ sealed class AdvancedCommandMenuMod : MonoBehaviour {
                         this.CurrentItemIndex = category.commands.Length - 1;
                     }
                 }
+                this.EnsureSelectedCommandVisible(this.CurrentCategoryIndex, GetCategory(this.CurrentCategoryIndex).commands.Length);
                 break;
             case MenuState.PlayerSelection:
                 this.CurrentScreen?.NavigateUp();
@@ -207,6 +238,7 @@ sealed class AdvancedCommandMenuMod : MonoBehaviour {
                         this.CurrentItemIndex = 0;
                     }
                 }
+                this.EnsureSelectedCommandVisible(this.CurrentCategoryIndex, GetCategory(this.CurrentCategoryIndex).commands.Length);
                 break;
             case MenuState.PlayerSelection:
                 this.CurrentScreen?.NavigateDown();
@@ -592,15 +624,14 @@ sealed class AdvancedCommandMenuMod : MonoBehaviour {
 
         bool isHost = Helper.LocalPlayer?.IsHost ?? false;
 
-        int maxVisibleItems = 8;
-        int startIndex = Mathf.Max(0, this.CurrentItemIndex - (maxVisibleItems / 2));
-        int endIndex = Mathf.Min(category.commands.Length, startIndex + maxVisibleItems);
-
-        if (endIndex - startIndex < maxVisibleItems && startIndex > 0) {
-            startIndex = Mathf.Max(0, endIndex - maxVisibleItems);
+        if (!this.commandScrollPositions.TryGetValue(this.CurrentCategoryIndex, out Vector2 scrollPos)) {
+            scrollPos = Vector2.zero;
         }
 
-        for (int i = startIndex; i < endIndex; i++) {
+        scrollPos = GUILayout.BeginScrollView(scrollPos, GUILayout.Height(CommandViewportHeight));
+        this.commandScrollPositions[this.CurrentCategoryIndex] = scrollPos;
+
+        for (int i = 0; i < category.commands.Length; i++) {
             CommandInfo cmd = category.commands[i];
 
             if (i == this.CurrentItemIndex) {
@@ -618,8 +649,9 @@ sealed class AdvancedCommandMenuMod : MonoBehaviour {
                 GUI.enabled = false;
             }
 
-            if (GUILayout.Button(buttonText, GUILayout.Height(35))) {
+            if (GUILayout.Button(buttonText, GUILayout.Height(CommandButtonHeight), GUILayout.ExpandWidth(true))) {
                 this.CurrentItemIndex = i;
+                this.EnsureSelectedCommandVisible(this.CurrentCategoryIndex, category.commands.Length);
                 if (!cmd.isPrivileged || isHost) {
                     this.HandleCategorySelection();
                 }
@@ -629,5 +661,7 @@ sealed class AdvancedCommandMenuMod : MonoBehaviour {
             GUI.backgroundColor = Color.white;
             GUI.enabled = true;
         }
+
+        GUILayout.EndScrollView();
     }
 }
