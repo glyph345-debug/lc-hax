@@ -9,6 +9,7 @@ sealed class ParameterInputMenuScreen : BaseMenuScreen {
     string[] ParameterValues { get; set; }
     int CurrentParameterIndex { get; set; }
     string CurrentInputValue { get; set; } = "";
+    bool[] IsPlayerParameter { get; set; }
 
     public ParameterInputMenuScreen(AdvancedCommandMenuMod menu, string name, string syntax, string[] parameters, string[] parameterDescriptions) : base(menu) {
         this.CommandName = name;
@@ -17,6 +18,22 @@ sealed class ParameterInputMenuScreen : BaseMenuScreen {
         this.ParameterDescriptions = parameterDescriptions ?? [];
         this.ParameterValues = new string[this.Parameters.Length];
         this.CurrentParameterIndex = 0;
+        this.IsPlayerParameter = [];
+        this.InitializePlayerParameters();
+    }
+
+    void InitializePlayerParameters() {
+        this.IsPlayerParameter = new bool[this.Parameters.Length];
+        for (int i = 0; i < this.Parameters.Length; i++) {
+            string paramName = this.Parameters[i];
+            string paramDesc = this.ParameterDescriptions != null && i < this.ParameterDescriptions.Length ? this.ParameterDescriptions[i] : "";
+
+            this.IsPlayerParameter[i] =
+                paramName.Contains("player", System.StringComparison.OrdinalIgnoreCase) ||
+                paramName.Contains("target", System.StringComparison.OrdinalIgnoreCase) ||
+                paramDesc.Contains("player", System.StringComparison.OrdinalIgnoreCase) ||
+                paramDesc.Contains("target", System.StringComparison.OrdinalIgnoreCase);
+        }
     }
 
     public override void NavigateUp() {
@@ -119,6 +136,7 @@ sealed class ParameterInputMenuScreen : BaseMenuScreen {
             // Determine if optional
             bool isOptional = description.Contains("optional", System.StringComparison.OrdinalIgnoreCase) || description.Contains("default", System.StringComparison.OrdinalIgnoreCase);
             bool isCurrent = i == this.CurrentParameterIndex;
+            bool isPlayerParam = this.IsPlayerParameter[i];
 
             GUILayout.BeginVertical(GUI.skin.box);
 
@@ -133,9 +151,34 @@ sealed class ParameterInputMenuScreen : BaseMenuScreen {
 
             // Show current value or input field
             if (isCurrent) {
-                GUI.SetNextControlName($"Input_{i}");
-                this.CurrentInputValue = GUILayout.TextField(this.CurrentInputValue, GUILayout.Height(30));
-                GUI.FocusControl($"Input_{i}");
+                if (isPlayerParam) {
+                    GUILayout.BeginHorizontal();
+
+                    GUI.SetNextControlName($"Input_{i}");
+                    this.CurrentInputValue = GUILayout.TextField(this.CurrentInputValue, GUILayout.Height(30), GUILayout.ExpandWidth(true));
+                    GUI.FocusControl($"Input_{i}");
+
+                    if (GUILayout.Button("Select Player", GUILayout.Width(120), GUILayout.Height(30))) {
+                        this.ParameterValues[this.CurrentParameterIndex] = this.CurrentInputValue;
+
+                        this.Menu.screenStack.Push(this);
+
+                        PlayerPickerMenuScreen pickerScreen = new(this.Menu, (selectedUsername) => {
+                            this.CurrentInputValue = selectedUsername;
+                            this.ParameterValues[this.CurrentParameterIndex] = selectedUsername;
+                        });
+
+                        this.Menu.CurrentScreen = pickerScreen;
+                        this.Menu.CurrentState = AdvancedCommandMenuMod.MenuState.ParameterInput;
+                    }
+
+                    GUILayout.EndHorizontal();
+                }
+                else {
+                    GUI.SetNextControlName($"Input_{i}");
+                    this.CurrentInputValue = GUILayout.TextField(this.CurrentInputValue, GUILayout.Height(30));
+                    GUI.FocusControl($"Input_{i}");
+                }
             }
             else {
                 string displayValue = this.ParameterValues[i];
@@ -167,6 +210,19 @@ sealed class ParameterInputMenuScreen : BaseMenuScreen {
             GUILayout.Label(TeleportationMenuManager.StatusMessage, GUI.skin.box, GUILayout.Height(30));
         }
 
-        GUILayout.Label("Numpad: 8/2=Navigate Fields, 5=Execute, Backspace=Cancel", GUI.skin.label);
+        bool hasPlayerParams = false;
+        for (int i = 0; i < this.IsPlayerParameter.Length; i++) {
+            if (this.IsPlayerParameter[i]) {
+                hasPlayerParams = true;
+                break;
+            }
+        }
+
+        if (hasPlayerParams) {
+            GUILayout.Label("Numpad: 8/2=Navigate Fields, 5=Execute, Backspace=Cancel | Click 'Select Player' to pick from lobby", GUI.skin.label);
+        }
+        else {
+            GUILayout.Label("Numpad: 8/2=Navigate Fields, 5=Execute, Backspace=Cancel", GUI.skin.label);
+        }
     }
 }
