@@ -69,7 +69,13 @@ sealed class PlayerCommandsMenuScreen(AdvancedCommandMenuMod menu, PlayerControl
     ];
 
     public override void NavigateUp() {
-        if (this.IsAwaitingInput) return;
+        if (this.IsAwaitingInput) {
+            // Skip optional parameters or go to previous parameter
+            if (this.CurrentParameterIndex > 0) {
+                this.CurrentParameterIndex--;
+            }
+            return;
+        }
 
         this.SelectedCommandIndex--;
         if (this.SelectedCommandIndex < 0) {
@@ -78,7 +84,17 @@ sealed class PlayerCommandsMenuScreen(AdvancedCommandMenuMod menu, PlayerControl
     }
 
     public override void NavigateDown() {
-        if (this.IsAwaitingInput) return;
+        if (this.IsAwaitingInput) {
+            // Skip optional parameters or go to next parameter
+            PlayerCommand[] visibleCommands = this.GetVisibleCommands();
+            if (this.SelectedCommandIndex >= visibleCommands.Length) return;
+
+            PlayerCommand cmd = visibleCommands[this.SelectedCommandIndex];
+            if (this.CurrentParameterIndex < cmd.parameters.Length - 1) {
+                this.CurrentParameterIndex++;
+            }
+            return;
+        }
 
         this.SelectedCommandIndex++;
         if (this.SelectedCommandIndex >= this.GetVisibleCommands().Length) {
@@ -88,14 +104,45 @@ sealed class PlayerCommandsMenuScreen(AdvancedCommandMenuMod menu, PlayerControl
 
     public override void ExecuteSelected() {
         if (this.IsAwaitingInput) {
-            this.HandleParameterInput();
+            // Validate and move to next parameter
+            PlayerCommand[] visibleCommands = this.GetVisibleCommands();
+            if (this.SelectedCommandIndex >= visibleCommands.Length) return;
+
+            PlayerCommand cmd = visibleCommands[this.SelectedCommandIndex];
+            string currentParam = cmd.parameters[this.CurrentParameterIndex];
+            string currentValue = this.ParameterValues[this.CurrentParameterIndex] ?? "";
+
+            // Check if optional
+            bool isOptional = currentParam.Contains("optional", System.StringComparison.OrdinalIgnoreCase) || currentParam.Contains("default", System.StringComparison.OrdinalIgnoreCase);
+
+            // Validate required parameters
+            if (string.IsNullOrWhiteSpace(currentValue) && !isOptional) {
+                TeleportationMenuManager.StatusMessage = $"{currentParam} is required!";
+                return;
+            }
+
+            // Validate format
+            if (!string.IsNullOrWhiteSpace(currentValue) && !ValidateParameter(currentParam, currentValue)) {
+                TeleportationMenuManager.StatusMessage = $"Invalid {currentParam} format!";
+                return;
+            }
+
+            // Move to next parameter
+            this.CurrentParameterIndex++;
+
+            // If we've collected all parameters, execute
+            if (this.CurrentParameterIndex >= cmd.parameters.Length) {
+                string[] finalArgs = [.. this.ParameterValues.Take(cmd.parameters.Length)];
+                this.ExecutePlayerCommand(cmd, finalArgs);
+                this.IsAwaitingInput = false;
+            }
             return;
         }
 
-        PlayerCommand[] visibleCommands = this.GetVisibleCommands();
-        if (this.SelectedCommandIndex < 0 || this.SelectedCommandIndex >= visibleCommands.Length) return;
+        PlayerCommand[] visibleCommandsForSelection = this.GetVisibleCommands();
+        if (this.SelectedCommandIndex < 0 || this.SelectedCommandIndex >= visibleCommandsForSelection.Length) return;
 
-        PlayerCommand selectedCommand = visibleCommands[this.SelectedCommandIndex];
+        PlayerCommand selectedCommand = visibleCommandsForSelection[this.SelectedCommandIndex];
 
         // Check if command requires parameters
         if (selectedCommand.parameters.Length > 0) {
@@ -117,37 +164,51 @@ sealed class PlayerCommandsMenuScreen(AdvancedCommandMenuMod menu, PlayerControl
 
     void HandleParameterInput() {
         PlayerCommand[] visibleCommands = this.GetVisibleCommands();
-        PlayerCommand currentCommand = visibleCommands[this.SelectedCommandIndex];
+        if (this.SelectedCommandIndex >= visibleCommands.Length) return;
 
-        if (this.CurrentParameterIndex < currentCommand.parameters.Length) {
-            string currentParam = currentCommand.parameters[this.CurrentParameterIndex];
-            this.ShowParameterInput(currentParam, currentCommand);
+        PlayerCommand cmd = visibleCommands[this.SelectedCommandIndex];
+
+        if (this.CurrentParameterIndex < cmd.parameters.Length) {
+            // Validate current parameter before moving to next
+            string currentParam = cmd.parameters[this.CurrentParameterIndex];
+            string currentValue = this.ParameterValues[this.CurrentParameterIndex] ?? "";
+
+            // Check if current parameter is optional
+            bool isOptional = currentParam.Contains("optional", System.StringComparison.OrdinalIgnoreCase) || currentParam.Contains("default", System.StringComparison.OrdinalIgnoreCase);
+
+            if (string.IsNullOrWhiteSpace(currentValue) && !isOptional) {
+                // Still on current parameter - need to input
+                this.ShowParameterInput(currentParam, cmd);
+            }
+            else if (!string.IsNullOrWhiteSpace(currentValue)) {
+                // Validate the input before moving to next
+                if (!ValidateParameter(currentParam, currentValue)) {
+                    TeleportationMenuManager.StatusMessage = $"Invalid {currentParam}!";
+                    this.ShowParameterInput(currentParam, cmd);
+                    return;
+                }
+            }
+
+            // Move to next parameter on next ExecuteSelected call
+            this.ShowParameterInput(currentParam, cmd);
         }
         else {
             // All parameters collected, execute command
-            string[] finalArgs = [.. this.ParameterValues.Take(currentCommand.parameters.Length)];
-            this.ExecutePlayerCommand(currentCommand, finalArgs);
+            string[] finalArgs = [.. this.ParameterValues.Take(cmd.parameters.Length)];
+            this.ExecutePlayerCommand(cmd, finalArgs);
             this.IsAwaitingInput = false;
         }
     }
 
     void ShowParameterInput(string parameterType, PlayerCommand _) {
-        // This would show input fields, menus, etc. based on parameter type
-        // For now, we'll use GUI.TextField for simplicity
         GUILayout.Label($"Enter {parameterType}:", GUI.skin.box);
 
         string currentValue = this.ParameterValues[this.CurrentParameterIndex] ?? "";
         string newValue = GUILayout.TextField(currentValue, GUILayout.Height(30));
         this.ParameterValues[this.CurrentParameterIndex] = newValue;
 
-        if (GUILayout.Button("Confirm", GUILayout.Height(30))) {
-            if (!ValidateParameter(parameterType, newValue)) {
-                TeleportationMenuManager.StatusMessage = $"Invalid {parameterType}!";
-                return;
-            }
-
-            this.CurrentParameterIndex++;
-        }
+        GUILayout.Space(5);
+        GUILayout.Label($"Press Numpad 5 to confirm, Numpad 2/8 to skip if optional", GUI.skin.label);
     }
 
     static bool ValidateParameter(string parameterType, string value) {
@@ -291,12 +352,21 @@ sealed class PlayerCommandsMenuScreen(AdvancedCommandMenuMod menu, PlayerControl
 
     void DrawParameterInput() {
         PlayerCommand[] visibleCommands = this.GetVisibleCommands();
-        PlayerCommand currentCommand = visibleCommands[this.SelectedCommandIndex];
+        if (this.SelectedCommandIndex >= visibleCommands.Length) return;
 
-        GUILayout.Label($"Entering parameters for: {currentCommand.name}", GUI.skin.box);
+        PlayerCommand cmd = visibleCommands[this.SelectedCommandIndex];
+
+        GUILayout.Label($"Entering parameters for: {cmd.name}", GUI.skin.box);
         GUILayout.Label($"Player: {this.TargetPlayer.playerUsername}", GUI.skin.label);
 
+        GUILayout.Space(5);
+
+        string paramNum = this.CurrentParameterIndex + 1 + " of " + cmd.parameters.Length;
+        GUILayout.Label($"Parameter {paramNum}: {cmd.parameters[this.CurrentParameterIndex]}", GUI.skin.box);
+
         this.HandleParameterInput();
+
+        GUILayout.Space(10);
 
         if (GUILayout.Button("Cancel", GUILayout.Height(25))) {
             this.IsAwaitingInput = false;

@@ -45,15 +45,17 @@ sealed class ParameterInputMenuScreen : BaseMenuScreen {
 
         // Validate all required parameters are filled
         bool allFilled = true;
-        for (int i = 0; i < this.ParameterValues.Length; i++) {
+        for (int i = 0; i < this.Parameters.Length; i++) {
+            if (i >= this.ParameterValues.Length) break;
+
             string param = this.Parameters[i];
             string value = this.ParameterValues[i];
 
             // Check if parameter is optional (contains "optional" or "default" in description)
-            bool isOptional = this.ParameterDescriptions != null && 
+            bool isOptional = this.ParameterDescriptions != null &&
                             i < this.ParameterDescriptions.Length &&
-                            (this.ParameterDescriptions[i].ToLower().Contains("optional") ||
-                             this.ParameterDescriptions[i].ToLower().Contains("default"));
+                            (this.ParameterDescriptions[i].Contains("optional", System.StringComparison.OrdinalIgnoreCase) ||
+                             this.ParameterDescriptions[i].Contains("default", System.StringComparison.OrdinalIgnoreCase));
 
             if (string.IsNullOrWhiteSpace(value) && !isOptional) {
                 allFilled = false;
@@ -61,14 +63,14 @@ sealed class ParameterInputMenuScreen : BaseMenuScreen {
             }
 
             // Validate numeric parameters
-            if (!isOptional && !string.IsNullOrWhiteSpace(value)) {
-                if (param.ToLower().Contains("duration") || 
-                    param.ToLower().Contains("amount") || 
-                    param.ToLower().Contains("damage") || 
-                    param.ToLower().Contains("delay") ||
-                    param.ToLower().Contains("force") ||
-                    param.ToLower().Contains("scale") ||
-                    param == "quantity") {
+            if (!string.IsNullOrWhiteSpace(value)) {
+                if (param.Contains("duration", System.StringComparison.OrdinalIgnoreCase) ||
+                    param.Contains("amount", System.StringComparison.OrdinalIgnoreCase) ||
+                    param.Contains("damage", System.StringComparison.OrdinalIgnoreCase) ||
+                    param.Contains("delay", System.StringComparison.OrdinalIgnoreCase) ||
+                    param.Contains("force", System.StringComparison.OrdinalIgnoreCase) ||
+                    param.Contains("scale", System.StringComparison.OrdinalIgnoreCase) ||
+                    param.Contains("quantity", System.StringComparison.OrdinalIgnoreCase)) {
                     if (!float.TryParse(value, out _)) {
                         TeleportationMenuManager.StatusMessage = $"{param} must be a number!";
                         return;
@@ -82,16 +84,16 @@ sealed class ParameterInputMenuScreen : BaseMenuScreen {
             return;
         }
 
-        // Filter out empty optional parameters
-        string[] finalParams = new string[this.ParameterValues.Length];
-        Array.Copy(this.ParameterValues, finalParams, this.ParameterValues.Length);
+        // Only use the parameters we actually have
+        string[] finalParams = new string[this.Parameters.Length];
+        Array.Copy(this.ParameterValues, finalParams, this.Parameters.Length);
 
         this.ExecuteCommand(finalParams);
     }
 
     void ExecuteCommand(string[] parameters) {
         // Execute the command directly
-        this.Menu.ExecuteRegularCommandWithParams(this.CommandName, this.CommandSyntax, parameters);
+        AdvancedCommandMenuMod.ExecuteRegularCommandWithParams(this.CommandName, this.CommandSyntax, parameters);
 
         // Go back to category selection
         this.Back();
@@ -114,6 +116,8 @@ sealed class ParameterInputMenuScreen : BaseMenuScreen {
                 ? this.ParameterDescriptions[i]
                 : param;
 
+            // Determine if optional
+            bool isOptional = description.Contains("optional", System.StringComparison.OrdinalIgnoreCase) || description.Contains("default", System.StringComparison.OrdinalIgnoreCase);
             bool isCurrent = i == this.CurrentParameterIndex;
 
             GUILayout.BeginVertical(GUI.skin.box);
@@ -124,7 +128,8 @@ sealed class ParameterInputMenuScreen : BaseMenuScreen {
                 labelStyle.normal.textColor = Color.green;
                 labelStyle.fontStyle = FontStyle.Bold;
             }
-            GUILayout.Label($"{i + 1}. {description}", labelStyle);
+            string optionalLabel = isOptional ? " (optional)" : " (required)";
+            GUILayout.Label($"{i + 1}. {description}{optionalLabel}", labelStyle);
 
             // Show current value or input field
             if (isCurrent) {
