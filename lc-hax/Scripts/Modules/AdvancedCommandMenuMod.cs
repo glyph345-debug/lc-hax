@@ -37,7 +37,8 @@ sealed class AdvancedCommandMenuMod : MonoBehaviour {
         CategorySelection,
         PlayerSelection,
         ParameterInput,
-        PlayerCommandSelection
+        PlayerCommandSelection,
+        TeleportationSubmenu
     }
 
     public struct CommandInfo {
@@ -46,6 +47,7 @@ sealed class AdvancedCommandMenuMod : MonoBehaviour {
         internal bool isPrivileged;
         internal string[] parameters;
         internal string[] parameterDescriptions;
+        internal bool opensSubmenu;
     }
 
     struct CommandCategory {
@@ -189,6 +191,19 @@ sealed class AdvancedCommandMenuMod : MonoBehaviour {
 
         if (this.screenStack.Count > 0) {
             this.CurrentScreen = this.screenStack.Pop();
+            // Update state based on the popped screen
+            if (this.CurrentScreen is TeleportationOptionsMenuScreen) {
+                this.CurrentState = MenuState.TeleportationSubmenu;
+            }
+            else if (this.CurrentScreen is PlayersMenuScreen) {
+                this.CurrentState = MenuState.PlayerSelection;
+            }
+            else if (this.CurrentScreen is PlayerCommandsMenuScreen) {
+                this.CurrentState = MenuState.PlayerCommandSelection;
+            }
+            else if (this.CurrentScreen is ParameterInputMenuScreen) {
+                this.CurrentState = MenuState.ParameterInput;
+            }
         }
         else {
             this.CurrentState = MenuState.CategorySelection;
@@ -212,12 +227,9 @@ sealed class AdvancedCommandMenuMod : MonoBehaviour {
                 this.EnsureSelectedCommandVisible(this.CurrentCategoryIndex, GetCategory(this.CurrentCategoryIndex).commands.Length);
                 break;
             case MenuState.PlayerSelection:
-                this.CurrentScreen?.NavigateUp();
-                break;
             case MenuState.ParameterInput:
-                this.CurrentScreen?.NavigateUp();
-                break;
             case MenuState.PlayerCommandSelection:
+            case MenuState.TeleportationSubmenu:
                 this.CurrentScreen?.NavigateUp();
                 break;
             default:
@@ -241,12 +253,9 @@ sealed class AdvancedCommandMenuMod : MonoBehaviour {
                 this.EnsureSelectedCommandVisible(this.CurrentCategoryIndex, GetCategory(this.CurrentCategoryIndex).commands.Length);
                 break;
             case MenuState.PlayerSelection:
-                this.CurrentScreen?.NavigateDown();
-                break;
             case MenuState.ParameterInput:
-                this.CurrentScreen?.NavigateDown();
-                break;
             case MenuState.PlayerCommandSelection:
+            case MenuState.TeleportationSubmenu:
                 this.CurrentScreen?.NavigateDown();
                 break;
             default:
@@ -264,6 +273,7 @@ sealed class AdvancedCommandMenuMod : MonoBehaviour {
             case MenuState.PlayerSelection:
             case MenuState.ParameterInput:
             case MenuState.PlayerCommandSelection:
+            case MenuState.TeleportationSubmenu:
                 this.CurrentScreen?.ExecuteSelected();
                 break;
             default:
@@ -288,6 +298,13 @@ sealed class AdvancedCommandMenuMod : MonoBehaviour {
             bool isHost = Helper.LocalPlayer?.IsHost ?? false;
             if (command.isPrivileged && !isHost) {
                 TeleportationMenuManager.StatusMessage = "Command requires host privileges!";
+                return;
+            }
+
+            // Check if command opens a submenu
+            if (command.opensSubmenu) {
+                this.CurrentState = MenuState.TeleportationSubmenu;
+                this.CurrentScreen = new TeleportationOptionsMenuScreen(this);
                 return;
             }
 
@@ -371,7 +388,7 @@ sealed class AdvancedCommandMenuMod : MonoBehaviour {
                 commands = [
                     new CommandInfo { name = "Exit", syntax = "exit" },
                     new CommandInfo { name = "Enter", syntax = "enter" },
-                    new CommandInfo { name = "Teleport", syntax = "tp" },
+                    new CommandInfo { name = "Teleport", syntax = "tp", opensSubmenu = true },
                     new CommandInfo { name = "Void", syntax = "void" },
                     new CommandInfo { name = "Home", syntax = "home" },
                     new CommandInfo { name = "Mob", syntax = "mob" },
@@ -532,6 +549,7 @@ sealed class AdvancedCommandMenuMod : MonoBehaviour {
             case MenuState.PlayerSelection:
             case MenuState.ParameterInput:
             case MenuState.PlayerCommandSelection:
+            case MenuState.TeleportationSubmenu:
                 this.CurrentScreen?.Draw();
                 break;
             default:
@@ -642,6 +660,9 @@ sealed class AdvancedCommandMenuMod : MonoBehaviour {
             string buttonText = cmd.name;
             if (cmd.parameters != null && cmd.parameters.Length > 0) {
                 buttonText += " [→]";
+            }
+            if (cmd.opensSubmenu) {
+                buttonText += " [...]";
             }
             if (cmd.isPrivileged && !isHost) {
                 buttonText += " [HOST ONLY]";
