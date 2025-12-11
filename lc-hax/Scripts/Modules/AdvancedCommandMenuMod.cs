@@ -35,7 +35,7 @@ sealed class AdvancedCommandMenuMod : MonoBehaviour {
         PlayerCommandSelection
     }
 
-    struct CommandInfo {
+    public struct CommandInfo {
         internal string name;
         internal string syntax;
         internal bool isPrivileged;
