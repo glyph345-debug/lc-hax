@@ -21,6 +21,12 @@ class BaseMenuScreen {
             else if (this.Menu.CurrentScreen is ParameterInputMenuScreen) {
                 this.Menu.CurrentState = AdvancedCommandMenuMod.MenuState.ParameterInput;
             }
+            else if (this.Menu.CurrentScreen is TeleportationOptionsMenuScreen or
+                     TeleportCoordinatesMenuScreen or
+                     TeleportToPlayerMenuScreen or
+                     TeleportPlayerTransferMenuScreen) {
+                this.Menu.CurrentState = AdvancedCommandMenuMod.MenuState.TeleportationSubmenu;
+            }
         }
         else {
             this.Menu.CurrentState = AdvancedCommandMenuMod.MenuState.CategorySelection;
