@@ -3,20 +3,18 @@ using System.Linq;
 using GameNetcodeStuff;
 using UnityEngine;
 
-sealed class TeleportPlayerTransferMenuScreen : BaseMenuScreen {
+sealed class TeleportPlayerTransferMenuScreen(AdvancedCommandMenuMod menu) : BaseMenuScreen(menu) {
     enum SelectionPhase {
         Source,
         Destination
     }
 
-    PlayerControllerB?[] AvailablePlayers { get; }
+    PlayerControllerB?[] AvailablePlayers { get; } = TeleportPlayerTransferMenuScreen.GetAvailablePlayers();
     SelectionPhase CurrentPhase { get; set; } = SelectionPhase.Source;
     PlayerControllerB? SelectedSourcePlayer { get; set; }
     PlayerControllerB? SelectedDestinationPlayer { get; set; }
     int SourceIndex { get; set; } = 0;
     int DestinationIndex { get; set; } = 0;
-
-    public TeleportPlayerTransferMenuScreen(AdvancedCommandMenuMod menu) : base(menu) => this.AvailablePlayers = GetAvailablePlayers();
 
     public override void NavigateUp() {
         PlayerControllerB?[] players = this.GetCurrentPhasePlayers();

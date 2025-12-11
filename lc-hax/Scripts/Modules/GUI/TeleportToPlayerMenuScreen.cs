@@ -2,11 +2,9 @@ using System.Linq;
 using GameNetcodeStuff;
 using UnityEngine;
 
-sealed class TeleportToPlayerMenuScreen : BaseMenuScreen {
-    PlayerControllerB?[] AvailablePlayers { get; }
+sealed class TeleportToPlayerMenuScreen(AdvancedCommandMenuMod menu) : BaseMenuScreen(menu) {
+    PlayerControllerB?[] AvailablePlayers { get; } = TeleportToPlayerMenuScreen.GetAvailablePlayers();
     int SelectedIndex { get; set; } = 0;
-
-    public TeleportToPlayerMenuScreen(AdvancedCommandMenuMod menu) : base(menu) => this.AvailablePlayers = GetAvailablePlayers();
 
     public override void NavigateUp() {
         if (this.AvailablePlayers.Length > 0) {
