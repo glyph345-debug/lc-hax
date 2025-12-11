@@ -104,6 +104,16 @@ sealed class AdvancedCommandMenuMod : MonoBehaviour {
             this.CurrentItemIndex = 0;
             this.TabScrollOffset = 0;
             this.screenStack.Clear();
+
+            // Log numpad mapping when menu opens
+            Logger.Write("=== Advanced Command Menu - Numpad Controls ===");
+            Logger.Write("Numpad 4/6: Cycle category tabs (Previous/Next)");
+            Logger.Write("Numpad 8/2: Navigate commands (Up/Down)");
+            Logger.Write("Numpad 5: Select/Execute command");
+            Logger.Write("Backspace: Go back/Return to category view");
+            Logger.Write("Insert or M: Toggle menu");
+            Logger.Write($"Available categories: {GetCategoryNamesString()}");
+            Logger.Write("================================================");
             this.EnsureSelectedCommandVisible(this.CurrentCategoryIndex, GetCategory(this.CurrentCategoryIndex).commands.Length);
         }
         Logger.Write($"AdvancedCommandMenuMod: Menu toggled to {this.MenuVisible}");
@@ -349,6 +359,11 @@ sealed class AdvancedCommandMenuMod : MonoBehaviour {
 
     static int GetTotalCategories() => GetCategories().Length;
 
+    static string GetCategoryNamesString() {
+        CommandCategory[] categories = GetCategories();
+        return string.Join(", ", System.Array.ConvertAll(categories, c => c.name));
+    }
+
     static CommandCategory[] GetCategories() {
         return [
             new CommandCategory {
@@ -364,7 +379,7 @@ sealed class AdvancedCommandMenuMod : MonoBehaviour {
                 ]
             },
             new CommandCategory {
-                name = "Combat",
+                name = "Combat/Effects",
                 commands = [
                     new CommandInfo { name = "Noise", syntax = "noise", parameters = ["player", "duration"], parameterDescriptions = ["Player name", "Duration in seconds (optional, default 30)"] },
                     new CommandInfo { name = "Bomb", syntax = "bomb", parameters = ["player"], parameterDescriptions = ["Player name"] },
@@ -572,6 +587,13 @@ sealed class AdvancedCommandMenuMod : MonoBehaviour {
         if (totalCategories > MaxVisibleTabs) {
             GUILayout.Label($"Tab {this.CurrentCategoryIndex + 1}/{totalCategories}: {categories[this.CurrentCategoryIndex].name}", GUI.skin.label);
         }
+
+        // Help line for tab cycling
+        GUIStyle helpStyle = new(GUI.skin.label) {
+            fontSize = 11
+        };
+        helpStyle.normal.textColor = new Color(0.7f, 0.7f, 0.7f);
+        GUILayout.Label($"Use numpad 4/6 to cycle tabs: {GetCategoryNamesString()}", helpStyle);
 
         GUILayout.Space(10);
 
